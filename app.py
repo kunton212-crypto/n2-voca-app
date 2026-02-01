@@ -9,56 +9,54 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] 모바일 전용(@media) 강제 정렬 CSS ---
+# --- [스타일] Flexbox 버리고 CSS Grid 도입 ---
 st.markdown("""
     <style>
-    /* 기본 설정: 가로 스크롤 방지 */
-    .stApp { 
-        background-color: #000000 !important; 
-        overflow-x: hidden !important;
-    }
+    /* 기본 초기화 */
+    *, *::before, *::after { box-sizing: border-box !important; }
+    .stApp { background-color: #000000 !important; overflow-x: hidden !important; }
     
-    /* 전체 컨테이너 여백 극한으로 줄이기 */
+    /* 컨테이너 여백 제거 (화면 넓게 쓰기) */
     .block-container { 
         padding-top: 3rem !important; 
-        padding-left: 2px !important; 
-        padding-right: 2px !important;
+        padding-left: 5px !important; 
+        padding-right: 5px !important;
         max-width: 100vw !important;
     }
 
-    /* [핵심] 모바일 화면(폭 640px 이하)에서만 발동하는 강제 명령 */
+    /* [핵심] 모바일 전용: Flexbox가 아니라 Grid로 강제 전환 */
     @media (max-width: 640px) {
-        /* 가로 배치 강제 (Streamlit이 세로로 바꾸는 걸 막음) */
+        /* 컬럼을 감싸는 부모 요소를 Grid로 변경 */
         [data-testid="stHorizontalBlock"] {
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            gap: 5px !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important; /* 무조건 1:1 비율 격자 */
+            gap: 8px !important;
+            width: 100% !important;
+            flex-wrap: nowrap !important; /* 혹시 모를 flex 속성 차단 */
         }
         
-        /* 컬럼 너비 강제 50:50 */
+        /* 컬럼 자체 속성 초기화 */
         [data-testid="column"] {
-            width: 50% !important;
-            flex: 0 0 50% !important;
-            min-width: 50% !important;
-            max-width: 50% !important;
+            width: auto !important;
+            flex: unset !important; /* flex 속성 해제 */
+            min-width: 0 !important;
         }
         
-        /* 버튼 텍스트 크기 자동 조절 */
-        .stButton button {
-            padding-left: 5px !important;
-            padding-right: 5px !important;
+        /* 토글과 체크박스 텍스트 사이즈 강제 축소 (공간 확보) */
+        .stToggle label, .stCheckbox label {
+            font-size: 12px !important;
+            white-space: nowrap !important;
+        }
+        
+        /* 위젯 자체 크기 축소 */
+        .stToggle, .stCheckbox {
+            transform: scale(0.9);
+            transform-origin: left center;
+            margin-right: -10px !important;
         }
     }
     
-    /* 위젯 크기 조절 */
-    .stToggle, .stCheckbox {
-        white-space: nowrap !important;
-        transform: scale(0.85);
-        transform-origin: left center;
-        margin-right: -20px !important;
-    }
-    
-    /* 디자인 요소들 */
+    /* 디자인 요소 */
     .status-box {
         background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
@@ -80,10 +78,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [자바스크립트] Kyoko 소환 (이전과 동일) ---
+# --- [자바스크립트] Kyoko 소환 ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
-    
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -154,12 +151,13 @@ with st.sidebar:
 
 day_df = df[df['Day'] == sel_day].copy()
 
-# [수정] 간격 0으로 설정
-c1, c2 = st.columns([1, 1], gap="small") 
+# [수정] Grid 적용을 위해 gap 옵션 제거 (CSS가 다 함)
+c1, c2 = st.columns(2) 
 with c1:
-    do_shuffle = st.toggle("🔀 순서 섞기", value=False)
+    # 텍스트가 너무 길면 줄바꿈 되니 짧게 수정
+    do_shuffle = st.toggle("순서 섞기", value=False)
 with c2:
-    show_all = st.checkbox("✅ 복습 모드", value=False)
+    show_all = st.checkbox("복습 모드", value=False)
 
 if do_shuffle:
     day_df = day_df.sample(frac=1, random_state=st.session_state.shuffle_seed).reset_index(drop=True)
@@ -195,7 +193,7 @@ if not display_df.empty:
 
     # 4. 하단 버튼
     st.write("")
-    cl, cr = st.columns([1, 1], gap="small")
+    cl, cr = st.columns(2)
     with cl:
         if st.button("⏭️ 패스", use_container_width=True):
             st.session_state.idx = (st.session_state.idx + 1) % len(display_df)
