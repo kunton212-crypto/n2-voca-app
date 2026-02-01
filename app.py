@@ -9,35 +9,53 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] 가로 스크롤 방지 & 레이아웃 완벽 고정 ---
+# --- [스타일] 화면 밖 탈출 절대 금지 CSS ---
 st.markdown("""
     <style>
-    .stApp { background-color: #000000 !important; }
-    
-    /* [핵심] 전체 컨테이너가 화면 폭을 넘지 않도록 제한 */
-    .block-container { 
-        padding-top: 3.5rem !important; 
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        max-width: 100vw !important;
-        overflow-x: hidden !important;
+    .stApp { 
+        background-color: #000000 !important; 
+        overflow-x: hidden !important; /* 가로 스크롤 아예 차단 */
     }
     
-    /* [핵심] 컬럼 레이아웃: 강제 50%가 아니라 '비율(Flex)'로 공간 나눔 */
+    /* 전체 컨테이너 여백 최소화 */
+    .block-container { 
+        padding-top: 3rem !important; 
+        padding-left: 0.5rem !important; /* 좌우 여백 아주 조금만 */
+        padding-right: 0.5rem !important;
+        max-width: 100% !important;
+    }
+    
+    /* [핵심 해결책] 컬럼 간격(Gap) 제거 및 비율 강제 고정 */
     [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-wrap: nowrap !important;
         width: 100% !important;
-        gap: 8px !important; /* 간격 조금 줄임 */
+        gap: 2px !important; /* 컬럼 사이 간격을 거의 없앰 (이게 원인이었음) */
+        display: flex !important;
+        flex-wrap: nowrap !important; /* 절대 줄바꿈 금지 */
     }
     
     [data-testid="column"] {
-        flex: 1 !important;       /* 남은 공간을 공평하게 1씩 나눠가짐 */
-        width: auto !important;
-        min-width: 0px !important; /* 내용이 많아도 뚫고 나가지 않게 축소 허용 */
+        flex: 1 !important;       /* 1:1 비율 균등 분할 */
+        width: 50% !important;    /* 정확히 절반 */
+        min-width: 0px !important; /* 내용이 많아도 늘어나지 않게 */
+        padding: 0px !important;  /* 컬럼 내부 여백 제거 */
+        overflow: hidden !important; /* 넘치면 잘라버림 */
     }
     
-    /* 텍스트 및 박스 스타일 */
+    /* 텍스트 줄바꿈 방지 (버튼 이름 길어질 때 대비) */
+    .stButton button p {
+        white-space: nowrap !important;
+        font-size: 0.8rem !important;
+    }
+    
+    /* 토글/체크박스 강제 축소 및 정렬 */
+    .stToggle, .stCheckbox {
+        white-space: nowrap !important;
+        transform: scale(0.9); /* 아이폰 화면 좁으니까 살짝 줄임 */
+        transform-origin: left center;
+        margin-right: -10px !important; /* 우측 여백 강제 삭제 */
+    }
+
+    /* 디자인 요소들 */
     .status-box {
         background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
@@ -56,14 +74,10 @@ st.markdown("""
     }
     
     .stButton>button { height: 48px !important; border-radius: 12px !important; font-weight: bold !important; width: 100% !important; }
-    
-    /* 토글/체크박스 간격 미세 조정 */
-    .stToggle { margin-top: -5px; }
-    .stCheckbox { margin-top: -5px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- [자바스크립트] Kyoko 소환술 ---
+# --- [자바스크립트] Kyoko 소환 ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
     
@@ -101,10 +115,8 @@ def js_audio_button(text, key_suffix):
                 if (jaVoice) {{
                     msg.voice = jaVoice;
                 }}
-                
                 window.speechSynthesis.speak(msg);
             }}
-            
             if (window.speechSynthesis.onvoiceschanged !== undefined) {{
                 window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
             }}
@@ -142,11 +154,11 @@ with st.sidebar:
 
 day_df = df[df['Day'] == sel_day].copy()
 
-# [수정] 모바일 레이아웃: 비율(1:1)로 설정하여 화면을 꽉 채우되 넘치지 않게 함
-col1, col2 = st.columns([1, 1])
-with col1:
+# [수정] 간격 문제 해결된 레이아웃
+c1, c2 = st.columns([1, 1]) 
+with c1:
     do_shuffle = st.toggle("🔀 순서 섞기", value=False)
-with col2:
+with c2:
     show_all = st.checkbox("✅ 복습 모드", value=False)
 
 if do_shuffle:
@@ -181,7 +193,7 @@ if not display_df.empty:
     reveal_section("예문", "ex", row.iloc[4], has_voice=True)
     reveal_section("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
-    # 4. 하단 버튼 (이것도 자동으로 비율 조정됨)
+    # 4. 하단 버튼
     st.write("")
     cl, cr = st.columns(2)
     with cl:
