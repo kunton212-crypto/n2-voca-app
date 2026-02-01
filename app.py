@@ -9,7 +9,8 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] Grid 레이아웃 & 네온 디자인 ---
+# --- [스타일] CSS 에러 해결 & 모바일 Grid 재적용 ---
+# 주의: 여기서는 f-string(f""")을 쓰지 않아야 에러가 안 납니다.
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -26,14 +27,20 @@ st.markdown("""
         max-width: 100vw !important;
     }
 
-    /* 3. 모바일 Grid 레이아웃 (강제 2열 배치) */
+    /* 3. [핵심] 모바일 Grid 레이아웃 (강제 2열 배치 복구) */
     @media (max-width: 640px) {
-        /* st.columns를 쓰면 자동으로 생성되는 블록을 격자(Grid)로 변환 */
+        /* 상단 옵션, 중간 버튼, 하단 버튼 모두 적용됨 */
         [data-testid="stHorizontalBlock"] {
-            display: grid !important; grid-template-columns: 1fr 1fr !important;
-            gap: 10px !important; width: 100% !important;
+            display: grid !important; 
+            grid-template-columns: 1fr 1fr !important;
+            gap: 10px !important; 
+            width: 100% !important;
         }
-        [data-testid="column"] { width: auto !important; flex: unset !important; min-width: 0 !important; }
+        [data-testid="column"] { 
+            width: auto !important; 
+            flex: unset !important; 
+            min-width: 0 !important; 
+        }
     }
     
     /* 4. 디자인 컴포넌트 */
@@ -90,10 +97,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [자바스크립트] 오디오 버튼 ---
+# --- [자바스크립트] 오디오 버튼 (f-string 사용 시 중괄호 {{ }} 주의) ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
     
+    # 여기서 CSS 중괄호는 {{ }} 로 두 번 감싸야 에러가 안 납니다.
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -162,7 +170,7 @@ with st.sidebar:
 
 day_df = df[df['Day'] == sel_day].copy()
 
-# 상단 컨트롤바
+# 상단 컨트롤바 (Grid 적용됨)
 c1, c2 = st.columns(2) 
 with c1: do_shuffle = st.toggle("순서 섞기", value=False)
 with c2: show_all = st.checkbox("복습 모드", value=False)
@@ -183,7 +191,7 @@ if not display_df.empty:
     # 2. 단어 카드
     st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
-    # 3. 정답 및 음성 영역 (핵심 변경: 읽기/뜻 병렬 배치)
+    # 3. 정답 및 음성 (읽기/뜻 병렬 배치)
     def reveal_section(label, key, content, has_voice=False):
         if not st.session_state.show[key]:
             if st.button(f"{label} 확인", key=f"btn_{key}", use_container_width=True):
@@ -194,14 +202,14 @@ if not display_df.empty:
             else:
                 st.markdown(f'<div class="ans-normal">{content}</div>', unsafe_allow_html=True)
 
-    # [수정됨] 읽기와 뜻을 한 줄에 50:50으로 배치
+    # Grid가 적용되어 모바일에서도 50:50 유지됨
     c_read, c_mean = st.columns(2)
     with c_read:
         reveal_section("읽기", "reading", row.iloc[2], has_voice=True)
     with c_mean:
         reveal_section("뜻", "mean", row.iloc[3])
     
-    # 예문과 한자는 내용이 길 수 있으므로 꽉 찬 한 줄로 유지
+    # 예문과 한자는 한 줄 가득
     reveal_section("예문", "ex", row.iloc[4], has_voice=True)
     reveal_section("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
