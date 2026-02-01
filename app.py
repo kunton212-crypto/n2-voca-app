@@ -7,17 +7,14 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] 사용자 최적화 디자인 + 성장 시스템 UI ---
+# --- [디자인 수정] 스타일 태그를 하나로 묶어 에러 방지 ---
 st.markdown("""
-    <head>
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    </head>
     <style>
+    /* 전체 배경 */
     .stApp { background-color: #000000 !important; }
-    .block-container { padding-top: 3.5rem !important; }
+    .block-container { padding-top: 3rem !important; }
     
-    /* 현황판 */
+    /* 현황판 디자인 */
     .status-box {
         background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
@@ -78,7 +75,7 @@ with st.sidebar:
             st.session_state.p_day = sel_day
 
 day_df = df[df['Day'] == sel_day].reset_index(drop=True)
-total_learned = len(st.session_state.learned) # 전체 외운 단어 수
+total_learned = len(st.session_state.learned) 
 current_day_learned = [i for i in st.session_state.learned if i in day_df['GlobalID'].values]
 display_df = day_df[~day_df['GlobalID'].isin(st.session_state.learned)].reset_index(drop=True)
 
@@ -109,24 +106,12 @@ if not display_df.empty:
     st.write("")
     cl, cr = st.columns(2)
     with cl:
-        if st.button("⏭️ 패스"):
+        if st.button("⏭️ 패스", use_container_width=True):
             st.session_state.idx = (st.session_state.idx + 1) % len(display_df)
             st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
     with cr:
-        if st.button("✅ 외웠다", type="primary"):
+        if st.button("✅ 외웠다", type="primary", use_container_width=True):
             st.session_state.learned.add(row['GlobalID'])
             st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
 
-    # 5. 성장 로그 (실시간 레벨 시스템)
-    user_level = (total_learned // 10) + 1
-    exp_in_level = total_learned % 10
-    st.markdown(f"""
-        <div class="growth-log">
-            <span class="level-text">🔥 현재 레벨: {user_level} (누적 {total_learned}개 정복)</span>
-        </div>
-    """, unsafe_allow_html=True)
-    st.progress(exp_in_level / 10) # 10개마다 레벨업
-
-else:
-    st.balloons()
-    st.success("모든 단어를 마스터했습니다!")
+    # 5. 성장 로그
