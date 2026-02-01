@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-import re
+from gtts import gTTS
+from io import BytesIO
 
 # 구글 시트 주소
 SHEET_ID = "1KrgYU9dPGVWJgHeKJ4k4F6o0fqTtHvs7P5w7KmwSwwA"
@@ -8,12 +9,15 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [디자인] 사용자 스타일 + 터치 음성 UI ---
+# --- [스타일] 디자인 유지 + 오디오 플레이어 숨기기 ---
 st.markdown("""
     <style>
     .stApp { background-color: #000000 !important; }
     .block-container { padding-top: 3rem !important; }
     
+    /* 오디오 플레이어 숨기기 (소리는 나고 화면엔 안 보임) */
+    .stAudio { display: none !important; }
+
     .status-box {
         background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
@@ -26,16 +30,19 @@ st.markdown("""
     }
     .japanese-word { font-size: 3.2rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; }
 
-    /* 정답 박스: 터치 가능한 느낌을 주도록 민트색 테두리 추가 */
-    .ans-box { 
-        background: #262626; color: #00FFAA; padding: 12px; 
+    /* 정답 박스 (버튼처럼 보이게) */
+    .ans-btn { 
+        background: #262626; color: #00FFAA; padding: 12px; width: 100%;
         border-radius: 8px; text-align: center; font-weight: bold; 
-        margin-bottom: 6px; border: 1px solid #00FFAA;
-        cursor: pointer;
+        margin-bottom: 6px; border: 1px solid #00FFAA; display: block;
+    }
+    .ans-text {
+        background: #262626; color: #FFFFFF; padding: 12px; width: 100%;
+        border-radius: 8px; text-align: center; font-weight: bold; 
+        margin-bottom: 6px; border: 1px solid #555; display: block;
     }
     
     .stButton>button { height: 48px !important; border-radius: 12px !important; font-weight: bold !important; }
-
     .growth-log {
         margin-top: 15px; padding: 10px; background: #111; border-radius: 10px;
         border: 1px dashed #444; text-align: center;
@@ -44,16 +51,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [핵심] 아이폰용 음성 재생 자바스크립트 ---
-def play_audio_js(text):
-    clean = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "\\'")
-    tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={clean}&tl=ja&client=tw-ob"
-    st.components.v1.html(f"""
-        <script>
-            var audio = new Audio("{tts_url}");
-            audio.play();
-        </script>
-    """, height=0)
+# --- [정석] gTTS를 이용한 고음질 오디오 생성 ---
+def get_audio_bytes(text):
+    sound_file = BytesIO()
+    tts = gTTS(text, lang='ja')
+    tts.write_to_fp(sound_file)
+    return sound_file
 
 @st.cache_data(ttl=60)
 def load_data():
@@ -95,23 +98,29 @@ if not display_df.empty:
     # 2. 단어 카드
     st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
-    # 3. 정답 확인 (터치 시 음성 재생)
-    def reveal_and_play(label, key, content, can_play=False):
+    # 3. 정답 확인 및 음성 재생
+    def reveal_section(label, key, content, has_voice=False):
+        # 1) 아직 안 뒤집었을 때
         if not st.session_state.show[key]:
             if st.button(f"👁️ {label} 확인", key=f"btn_{key}"):
                 st.session_state.show[key] = True; st.rerun()
+        
+        # 2) 뒤집었을 때
         else:
-            # 버튼 형식으로 정답을 보여주어 터치 시 소리 재생 유도
-            if can_play:
-                if st.button(f"{content}", key=f"play_{key}"):
-                    play_audio_js(content)
+            if has_voice:
+                # 소리 나는 항목은 버튼으로 표시 (누르면 소리 남)
+                if st.button(f"🔊 {content}", key=f"play_{key}"):
+                    # 여기서 서버가 만든 진짜 오디오 파일을 재생
+                    sound = get_audio_bytes(content)
+                    st.audio(sound, format='audio/mp3', autoplay=True)
             else:
-                st.markdown(f'<div class="ans-box">{content}</div>', unsafe_allow_html=True)
+                # 소리 없는 항목은 그냥 텍스트 박스
+                st.markdown(f'<div class="ans-text">{content}</div>', unsafe_allow_html=True)
 
-    reveal_and_play("읽기", "reading", row.iloc[2], can_play=True)
-    reveal_and_play("뜻", "mean", row.iloc[3])
-    reveal_and_play("예문", "ex", row.iloc[4], can_play=True)
-    reveal_and_play("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
+    reveal_section("읽기", "reading", row.iloc[2], has_voice=True)
+    reveal_section("뜻", "mean", row.iloc[3])
+    reveal_section("예문", "ex", row.iloc[4], has_voice=True)
+    reveal_section("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
     # 4. 하단 버튼
     st.write("")
