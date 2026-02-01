@@ -27,7 +27,6 @@ st.markdown("""
     }
     .japanese-word { font-size: 3.2rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; }
 
-    /* 일반 텍스트 박스 (소리 없는 항목용) */
     .ans-normal {
         background: #262626; color: #FFFFFF; padding: 12px; width: 100%;
         border-radius: 8px; text-align: center; font-weight: bold; 
@@ -38,12 +37,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [필살기] 아이폰 전용 HTML 버튼 생성기 ---
-# 파이썬이 아닌, 브라우저가 직접 실행하는 버튼을 만듭니다.
+# --- [핵심 수정] 일본어 목소리 강제 선택 기능 추가 ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
     
-    # HTML/JS 코드를 직접 심습니다.
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -51,24 +48,14 @@ def js_audio_button(text, key_suffix):
     <style>
         body {{ margin: 0; padding: 0; background-color: transparent; }}
         .voice-btn {{
-            width: 100%;
-            height: 48px;
-            background-color: #262626;
-            color: #00FFAA;
-            border: 1.5px solid #00FFAA;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: "Source Sans Pro", sans-serif;
-            -webkit-tap-highlight-color: transparent;
+            width: 100%; height: 48px;
+            background-color: #262626; color: #00FFAA;
+            border: 1.5px solid #00FFAA; border-radius: 8px;
+            font-size: 16px; font-weight: bold; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-family: sans-serif; -webkit-tap-highlight-color: transparent;
         }}
-        .voice-btn:active {{
-            background-color: #333333;
-        }}
+        .voice-btn:active {{ background-color: #333333; }}
     </style>
     </head>
     <body>
@@ -77,15 +64,29 @@ def js_audio_button(text, key_suffix):
             function speak() {{
                 window.speechSynthesis.cancel();
                 const msg = new SpeechSynthesisUtterance('{clean_text}');
-                msg.lang = 'ja-JP';
+                msg.lang = 'ja-JP'; 
                 msg.rate = 1.0;
+
+                // [중요] 기기에서 사용 가능한 목소리 목록을 가져와서 일본어 목소리 강제 지정
+                let voices = window.speechSynthesis.getVoices();
+                // 일본어 목소리 찾기 (Google, Apple, Microsoft 순으로 우선순위)
+                let jaVoice = voices.find(v => v.lang === 'ja-JP' && v.name.includes('Google')) || 
+                              voices.find(v => v.lang === 'ja-JP');
+                
+                if (jaVoice) {{
+                    msg.voice = jaVoice;
+                }}
+                
                 window.speechSynthesis.speak(msg);
             }}
+            // 목소리 로딩이 비동기일 수 있어서 한 번 더 호출해줌
+            window.speechSynthesis.onvoiceschanged = () => {{
+                window.speechSynthesis.getVoices();
+            }};
         </script>
     </body>
     </html>
     """
-    # Streamlit 화면에 iframe으로 끼워넣기 (높이 50px 고정)
     components.html(html_code, height=50)
 
 @st.cache_data(ttl=60)
@@ -114,10 +115,8 @@ with st.sidebar:
         if 'p_day' not in st.session_state or st.session_state.p_day != sel_day:
             st.session_state.idx = 0; st.session_state.p_day = sel_day
 
-# 데이터 필터링
 day_df = df[df['Day'] == sel_day].copy()
 
-# 상단 셔플 토글
 col_shuffle, col_all = st.columns(2)
 with col_shuffle:
     do_shuffle = st.toggle("🔀 순서 섞기", value=False)
@@ -134,7 +133,6 @@ if not display_df.empty:
     row = display_df.iloc[st.session_state.idx]
     
     # 1. 현황판
-    total_learned = len(st.session_state.learned)
     current_learned = len([i for i in st.session_state.learned if i in day_df['GlobalID'].values])
     st.markdown(f'<div class="status-box">📊 {sel_day} : {current_learned} / {len(day_df)}</div>', unsafe_allow_html=True)
 
@@ -143,20 +141,13 @@ if not display_df.empty:
 
     # 3. 정답 및 음성 버튼 로직
     def reveal_section(label, key, content, has_voice=False):
-        # 1) 아직 안 봤을 때: Streamlit 버튼 (파이썬 제어)
         if not st.session_state.show[key]:
             if st.button(f"👁️ {label} 확인", key=f"btn_{key}", use_container_width=True):
-                st.session_state.show[key] = True
-                st.rerun()
-        
-        # 2) 봤을 때:
+                st.session_state.show[key] = True; st.rerun()
         else:
             if has_voice:
-                # [중요] 소리나는 항목은 'HTML 버튼'으로 교체
-                # 이 버튼은 파이썬을 거치지 않고 브라우저에서 바로 소리를 냅니다.
                 js_audio_button(content, key)
             else:
-                # 소리 없는 항목은 그냥 텍스트
                 st.markdown(f'<div class="ans-normal">{content}</div>', unsafe_allow_html=True)
 
     reveal_section("읽기", "reading", row.iloc[2], has_voice=True)
@@ -170,15 +161,14 @@ if not display_df.empty:
     with cl:
         if st.button("⏭️ 패스", use_container_width=True):
             st.session_state.idx = (st.session_state.idx + 1) % len(display_df)
-            st.session_state.show = {k:False for k in st.session_state.show}
-            st.rerun()
+            st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
     with cr:
         if st.button("✅ 외웠다", type="primary", use_container_width=True):
             st.session_state.learned.add(row['GlobalID'])
-            st.session_state.show = {k:False for k in st.session_state.show}
-            st.rerun()
+            st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
 
     # 5. 레벨 바
+    total_learned = len(st.session_state.learned)
     user_level = (total_learned // 10) + 1
     exp_in_level = total_learned % 10
     st.markdown(f"""
