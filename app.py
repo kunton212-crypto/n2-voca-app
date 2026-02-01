@@ -280,16 +280,39 @@ if not display_df.empty:
             st.session_state.learned.add(row['GlobalID'])
             st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
 
-    # 7. 레벨 바
+    # --- [새로운 레벨링 엔진] ---
     total_learned = len(st.session_state.learned)
-    user_level = (total_learned // 10) + 1
-    exp_in_level = total_learned % 10
+    
+    # 117회차 총 단어수를 약 3510개로 가정할 때, 100레벨까지 지수 곡선 적용
+    # 공식: level = (learned / 3510) ^ 0.7 * 99 + 1 (0.7은 초반 속도 보정치)
+    if total_learned == 0:
+        user_level = 1
+        progress_val = 0
+    else:
+        # 현재 레벨 계산 (소수점 포함)
+        raw_level = ((total_learned / 3510) ** 0.7) * 99 + 1
+        user_level = int(raw_level)
+        progress_val = raw_level - user_level # 현재 레벨 내에서의 진행도 (0~1)
+
+    # 칭호 시스템 (100레벨 기준)
+    if user_level <= 15: title, t_color = "일본어 신생아", "#888"
+    elif user_level <= 40: title, t_color = "N2 훈련병", "#00FFAA"
+    elif user_level <= 70: title, t_color = "단어 사냥꾼", "#00E1FF"
+    elif user_level <= 90: title, t_color = "N2 상급 닌자", "#AA00FF"
+    elif user_level < 100: title, t_color = "언어의 지배자", "#FF5500"
+    else: title, t_color = "N2 마스터 (神)", "#FFD700"
+
+    # 레벨 바 출력
     st.markdown(f"""
-    <div style="margin-top:20px; text-align:center; color:#555; font-size:0.8rem; letter-spacing:1px; font-weight:bold;">
-        LEVEL {user_level}
+    <div style="margin-top:20px; padding:15px; background:#121212; border-radius:12px; border:1px solid #333; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
+        <div style="color:{t_color}; font-size:0.85rem; font-weight:bold; letter-spacing:1px; margin-bottom:5px; text-shadow: 0 0 5px {t_color}55;">{title}</div>
+        <div style="color:#FFF; font-weight:900; font-size: 1.4rem; letter-spacing: 1px;">LV. {user_level}</div>
+        <div style="color:#555; font-size:0.7rem; margin-top:3px;">누적 암기 {total_learned} / 3510</div>
     </div>
     """, unsafe_allow_html=True)
-    st.progress(exp_in_level / 10)
+    
+    # 레벨 내부 진행도 바
+    st.progress(min(progress_val, 1.0))
 
 else:
     st.balloons()
