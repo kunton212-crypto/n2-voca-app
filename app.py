@@ -9,35 +9,43 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] ---
+# --- [스타일] 모바일 레이아웃 강제 고정 ---
 st.markdown("""
     <style>
     .stApp { background-color: #000000 !important; }
     .block-container { padding-top: 3.5rem !important; }
     
+    /* [핵심] 모바일에서도 컬럼이 절대 줄 바꿈 되지 않게 50:50 강제 고정 */
+    [data-testid="column"] {
+        width: 50% !important;
+        flex: 0 0 50% !important;
+        min-width: 50% !important;
+    }
+    
+    /* 텍스트 및 박스 스타일 */
     .status-box {
         background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
         margin-bottom: 10px; border: 1.5px solid #00FFAA;
     }
-
     .word-card { 
         background-color: #1A1A1A; padding: 25px 10px; border-radius: 15px; 
         border: 1px solid #444; text-align: center; margin-bottom: 10px; 
     }
     .japanese-word { font-size: 3.2rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; }
-
     .ans-normal {
         background: #262626; color: #FFFFFF; padding: 12px; width: 100%;
         border-radius: 8px; text-align: center; font-weight: bold; 
         margin-bottom: 6px; border: 1px solid #555; display: block;
     }
-    
     .stButton>button { height: 48px !important; border-radius: 12px !important; font-weight: bold !important; }
+    
+    /* 체크박스/토글 라벨 크기 살짝 조절 */
+    .stCheckbox label, .stToggle label { font-size: 0.85rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- [핵심] 일본어 성우 '강제' 선택 자바스크립트 ---
+# --- [자바스크립트] 1.0배속 + 일본어 성우 찾기 ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
     
@@ -64,20 +72,18 @@ def js_audio_button(text, key_suffix):
             function speak() {{
                 window.speechSynthesis.cancel();
                 const msg = new SpeechSynthesisUtterance('{clean_text}');
-                msg.lang = 'ja-JP'; // 우선 일본어로 설정
-                msg.rate = 1.0;     // 속도 정상
-
-                // 아이폰 안의 목소리들을 다 가져옴
-                let voices = window.speechSynthesis.getVoices();
+                msg.lang = 'ja-JP';
                 
-                // 1순위: 'Kyoko' (아이폰 고음질 일본어 성우)
-                // 2순위: 'Otoya' (아이폰 남자 성우)
-                // 3순위: 이름에 'Japan'이나 'jp'가 들어가는 아무 성우
-                let jaVoice = voices.find(v => v.name.includes('Kyoko')) || 
+                // [복구] 속도 1.0 (정상 속도)
+                msg.rate = 1.0; 
+
+                let voices = window.speechSynthesis.getVoices();
+                // 파파고 느낌을 내려면 'Siri'나 'Kyoko'가 베스트입니다.
+                let jaVoice = voices.find(v => v.name.includes('Siri') && v.lang === 'ja-JP') ||
+                              voices.find(v => v.name.includes('Kyoko')) || 
                               voices.find(v => v.name.includes('Otoya')) ||
                               voices.find(v => v.lang === 'ja-JP');
                 
-                // 찾았으면 그 성우로 강제 지정
                 if (jaVoice) {{
                     msg.voice = jaVoice;
                 }}
@@ -85,7 +91,6 @@ def js_audio_button(text, key_suffix):
                 window.speechSynthesis.speak(msg);
             }}
             
-            // 페이지 로딩 시 목소리 목록 미리 불러오기 (아이폰 버그 방지)
             if (window.speechSynthesis.onvoiceschanged !== undefined) {{
                 window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
             }}
@@ -123,6 +128,7 @@ with st.sidebar:
 
 day_df = df[df['Day'] == sel_day].copy()
 
+# [수정] 모바일에서도 50:50 비율 유지 (CSS로 강제함)
 col_shuffle, col_all = st.columns(2)
 with col_shuffle:
     do_shuffle = st.toggle("🔀 순서 섞기", value=False)
@@ -161,15 +167,15 @@ if not display_df.empty:
     reveal_section("예문", "ex", row.iloc[4], has_voice=True)
     reveal_section("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
-    # 4. 하단 버튼
+    # 4. 하단 버튼 (이것도 자동으로 반반 고정됨)
     st.write("")
     cl, cr = st.columns(2)
     with cl:
-        if st.button("⏭️ 다음", use_container_width=True):
+        if st.button("⏭️ 패스", use_container_width=True):
             st.session_state.idx = (st.session_state.idx + 1) % len(display_df)
             st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
     with cr:
-        if st.button("✅ 외웠음", type="primary", use_container_width=True):
+        if st.button("✅ 외웠다", type="primary", use_container_width=True):
             st.session_state.learned.add(row['GlobalID'])
             st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
 
