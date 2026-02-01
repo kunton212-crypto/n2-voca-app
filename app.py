@@ -9,63 +9,66 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] 화면 밖 탈출 절대 금지 CSS ---
+# --- [스타일] 화면 폭 강제 제한 CSS ---
 st.markdown("""
     <style>
+    /* 1. 모든 요소가 테두리 포함 크기로 계산되게 강제 (가로 스크롤 원인 제거) */
+    *, *::before, *::after {
+        box-sizing: border-box !important;
+    }
+
     .stApp { 
         background-color: #000000 !important; 
-        overflow-x: hidden !important; /* 가로 스크롤 아예 차단 */
+        overflow-x: hidden !important; /* 가로 스크롤 물리적 차단 */
     }
     
-    /* 전체 컨테이너 여백 최소화 */
+    /* 2. 전체 컨테이너 너비를 화면 너비(100vw)로 딱 맞춤 */
     .block-container { 
         padding-top: 3rem !important; 
-        padding-left: 0.5rem !important; /* 좌우 여백 아주 조금만 */
-        padding-right: 0.5rem !important;
-        max-width: 100% !important;
+        padding-left: 10px !important; 
+        padding-right: 10px !important;
+        max-width: 100vw !important;
+        width: 100vw !important;
     }
     
-    /* [핵심 해결책] 컬럼 간격(Gap) 제거 및 비율 강제 고정 */
+    /* 3. 컬럼 레이아웃: 화면 밖으로 밀려나지 않도록 Flex 설정 */
     [data-testid="stHorizontalBlock"] {
         width: 100% !important;
-        gap: 2px !important; /* 컬럼 사이 간격을 거의 없앰 (이게 원인이었음) */
         display: flex !important;
-        flex-wrap: nowrap !important; /* 절대 줄바꿈 금지 */
+        flex-direction: row !important; /* 가로 배치 강제 */
+        flex-wrap: nowrap !important;   /* 줄 바꿈 금지 */
+        gap: 5px !important;            /* 간격 최소화 */
     }
     
     [data-testid="column"] {
-        flex: 1 !important;       /* 1:1 비율 균등 분할 */
-        width: 50% !important;    /* 정확히 절반 */
-        min-width: 0px !important; /* 내용이 많아도 늘어나지 않게 */
-        padding: 0px !important;  /* 컬럼 내부 여백 제거 */
-        overflow: hidden !important; /* 넘치면 잘라버림 */
+        flex: 1 !important;             /* 1:1 비율 */
+        width: 50% !important;          /* 절반 크기 */
+        min-width: 0 !important;        /* 내용이 많아도 늘어나지 않음 */
     }
     
-    /* 텍스트 줄바꿈 방지 (버튼 이름 길어질 때 대비) */
-    .stButton button p {
-        white-space: nowrap !important;
-        font-size: 0.8rem !important;
-    }
-    
-    /* 토글/체크박스 강제 축소 및 정렬 */
+    /* 4. 위젯들이 칸을 넘어가지 않게 축소 */
     .stToggle, .stCheckbox {
         white-space: nowrap !important;
-        transform: scale(0.9); /* 아이폰 화면 좁으니까 살짝 줄임 */
-        transform-origin: left center;
-        margin-right: -10px !important; /* 우측 여백 강제 삭제 */
+        overflow: hidden !important;
+        width: 100% !important;
     }
+    
+    /* 텍스트 크기 자동 조절 */
+    p { font-size: 0.9rem !important; }
 
     /* 디자인 요소들 */
     .status-box {
         background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
         margin-bottom: 10px; border: 1.5px solid #00FFAA;
+        width: 100%;
     }
     .word-card { 
         background-color: #1A1A1A; padding: 25px 10px; border-radius: 15px; 
-        border: 1px solid #444; text-align: center; margin-bottom: 10px; 
+        border: 1px solid #444; text-align: center; margin-bottom: 10px;
+        width: 100%; 
     }
-    .japanese-word { font-size: 3.2rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; }
+    .japanese-word { font-size: 3rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; }
     
     .ans-normal {
         background: #262626; color: #FFFFFF; padding: 12px; width: 100%;
@@ -94,6 +97,7 @@ def js_audio_button(text, key_suffix):
             font-size: 16px; font-weight: bold; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
             font-family: sans-serif; -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box; /* 버튼도 크기 계산 포함 */
         }}
         .voice-btn:active {{ background-color: #333333; }}
     </style>
@@ -154,7 +158,7 @@ with st.sidebar:
 
 day_df = df[df['Day'] == sel_day].copy()
 
-# [수정] 간격 문제 해결된 레이아웃
+# [수정] 강제 병렬 배치
 c1, c2 = st.columns([1, 1]) 
 with c1:
     do_shuffle = st.toggle("🔀 순서 섞기", value=False)
