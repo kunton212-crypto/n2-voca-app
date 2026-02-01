@@ -9,8 +9,7 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] CSS 에러 해결 & 모바일 Grid 재적용 ---
-# 주의: 여기서는 f-string(f""")을 쓰지 않아야 에러가 안 납니다.
+# --- [스타일] f-string 제거 (일반 문자열 사용) -> 에러 원천 차단 ---
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -27,12 +26,12 @@ st.markdown("""
         max-width: 100vw !important;
     }
 
-    /* 3. [핵심] 모바일 Grid 레이아웃 (강제 2열 배치 복구) */
+    /* 3. [핵심] 모바일 Grid 레이아웃 (스타일이 적용되면 이것도 작동함) */
     @media (max-width: 640px) {
-        /* 상단 옵션, 중간 버튼, 하단 버튼 모두 적용됨 */
+        /* st.columns를 강제로 Grid로 변환 */
         [data-testid="stHorizontalBlock"] {
             display: grid !important; 
-            grid-template-columns: 1fr 1fr !important;
+            grid-template-columns: 1fr 1fr !important; /* 1:1 비율 격자 */
             gap: 10px !important; 
             width: 100% !important;
         }
@@ -97,17 +96,17 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [자바스크립트] 오디오 버튼 (f-string 사용 시 중괄호 {{ }} 주의) ---
+# --- [자바스크립트] f-string 사용 (CSS 중괄호 {{ }} 두 번 감싸기 필수) ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
     
-    # 여기서 CSS 중괄호는 {{ }} 로 두 번 감싸야 에러가 안 납니다.
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700&display=swap" rel="stylesheet">
     <style>
+        /* 여기서 중괄호는 {{ }} 로 두 번 써야 파이썬이 에러를 안 냅니다 */
         body {{ margin: 0; padding: 0; background: transparent; overflow: hidden; font-family: 'Noto Sans JP', sans-serif; }}
         .voice-btn {{
             width: 100%; height: 50px;
@@ -170,7 +169,7 @@ with st.sidebar:
 
 day_df = df[df['Day'] == sel_day].copy()
 
-# 상단 컨트롤바 (Grid 적용됨)
+# 상단 컨트롤바
 c1, c2 = st.columns(2) 
 with c1: do_shuffle = st.toggle("순서 섞기", value=False)
 with c2: show_all = st.checkbox("복습 모드", value=False)
@@ -191,7 +190,7 @@ if not display_df.empty:
     # 2. 단어 카드
     st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
-    # 3. 정답 및 음성 (읽기/뜻 병렬 배치)
+    # 3. 정답 및 음성 영역
     def reveal_section(label, key, content, has_voice=False):
         if not st.session_state.show[key]:
             if st.button(f"{label} 확인", key=f"btn_{key}", use_container_width=True):
@@ -202,14 +201,13 @@ if not display_df.empty:
             else:
                 st.markdown(f'<div class="ans-normal">{content}</div>', unsafe_allow_html=True)
 
-    # Grid가 적용되어 모바일에서도 50:50 유지됨
+    # 읽기/뜻 병렬 배치
     c_read, c_mean = st.columns(2)
     with c_read:
         reveal_section("읽기", "reading", row.iloc[2], has_voice=True)
     with c_mean:
         reveal_section("뜻", "mean", row.iloc[3])
     
-    # 예문과 한자는 한 줄 가득
     reveal_section("예문", "ex", row.iloc[4], has_voice=True)
     reveal_section("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
