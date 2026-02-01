@@ -2,60 +2,62 @@ import streamlit as st
 import pandas as pd
 import random
 import re
-import streamlit.components.v1 as components
+import base64
 
 # 구글 시트 주소
 SHEET_ID = "1KrgYU9dPGVWJgHeKJ4k4F6o0fqTtHvs7P5w7KmwSwwA"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
-st.set_page_config(page_title="N2 단어장", page_icon="🎴", layout="centered")
+st.set_page_config(page_title="N2", page_icon="🎴", layout="centered")
 
-# --- [초압축 & 고대비] 스타일 (현황판 가시성 100%) ---
+# --- [초압축 디자인] 폰 화면에 무조건 맞추기 ---
 st.markdown("""
     <style>
-    .stApp { background-color: #000000 !important; } /* 배경을 완전 검정으로 */
-    h1, h2, h3, h4, h5, h6, p, span, label, div { color: #FFFFFF !important; }
-    .block-container { padding: 0px 10px !important; }
-
-    /* 현황판을 화면 최상단에 배경색과 함께 고정 */
-    .status-bar {
-        background-color: #1E1E1E; padding: 10px; border-radius: 0 0 10px 10px;
-        display: flex; justify-content: space-between; font-weight: bold;
-        color: #00FFAA !important; font-size: 0.9rem; border-bottom: 2px solid #00FFAA;
+    /* 1. 배경 및 전체 여백 제거 */
+    .stApp { background-color: #000000 !important; }
+    .block-container { padding: 0px !important; margin: 0px !important; }
+    
+    /* 2. 현황판을 카드 안쪽으로 배치 (가시성 확보) */
+    .status-text {
+        text-align: right; color: #00FFAA !important; font-size: 0.8rem;
+        padding: 5px 15px 0 0; font-weight: bold;
     }
 
-    /* 단어 카드 여백 최소화 */
+    /* 3. 카드 크기 대폭 축소 */
     .word-card { 
-        background-color: #111111 !important; padding: 15px 5px !important; 
-        border-radius: 12px; border: 1px solid #333; text-align: center; margin-top: 10px;
+        background-color: #1A1A1A !important; padding: 15px 5px !important; 
+        border-radius: 12px; border: 1px solid #333; text-align: center; 
+        margin: 5px 10px !important;
     }
-    .japanese-word { font-size: 3rem !important; color: #FFD700 !important; margin: 0; }
+    .japanese-word { font-size: 2.5rem !important; color: #FFD700 !important; margin: 0; }
 
-    /* 정답 박스와 음성 버튼을 같은 줄에 배치 */
-    .answer-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
-    .answer-text { 
-        flex: 1; background: #222; padding: 10px; border-radius: 8px; border: 1px solid #444;
-        font-size: 0.95rem; font-weight: bold; text-align: center; color: #FFF !important;
+    /* 4. [핵심] 정답 한 줄 고정 로직 */
+    .row-container {
+        display: flex; align-items: center; justify-content: center;
+        gap: 5px; margin: 0 10px 6px 10px;
+    }
+    .answer-box {
+        flex: 1; background: #262626; padding: 10px 5px; border-radius: 8px;
+        color: white; font-weight: bold; font-size: 0.9rem; text-align: center;
+        border: 1px solid #444; min-height: 42px; display: flex; align-items: center; justify-content: center;
     }
 
-    /* 버튼 스타일 */
-    .stButton>button { height: 42px !important; border-radius: 8px !important; }
+    /* 버튼 스타일 압축 */
+    .stButton>button { height: 42px !important; border-radius: 8px !important; font-size: 0.85rem !important; }
+    .stProgress { margin: 0 10px !important; height: 4px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- [핵심] 폰에서 소리 나게 하는 자바스크립트 ---
-def play_audio_js(text):
-    clean = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "\\'")
-    js_code = f"""
-        <script>
-        window.speechSynthesis.cancel();
-        var msg = new SpeechSynthesisUtterance('{clean}');
-        msg.lang = 'ja-JP';
-        msg.rate = 1.0;
-        window.speechSynthesis.speak(msg);
-        </script>
+# --- [무조건 성공] 구글 TTS API 직접 호출 방식 ---
+def play_voice(text):
+    clean = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '')
+    # 구글 번역 TTS API를 활용하여 음성 파일 생성 없이 즉석 재생
+    tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={clean}&tl=ja&client=tw-ob"
+    audio_html = f"""
+        <iframe src="{tts_url}" allow="autoplay" style="display:none"></iframe>
+        <audio autoplay><source src="{tts_url}" type="audio/mpeg"></audio>
     """
-    components.html(js_code, height=0)
+    st.markdown(audio_html, unsafe_allow_html=True)
 
 @st.cache_data(ttl=60)
 def load_data():
@@ -70,45 +72,46 @@ df = load_data()
 
 # 세션 상태
 if 'idx' not in st.session_state: st.session_state.idx = 0
-if 'learned_list' not in st.session_state: st.session_state.learned_list = set()
+if 'learned' not in st.session_state: st.session_state.learned = set()
 if 'show' not in st.session_state: st.session_state.show = {k:False for k in ["reading", "mean", "ex", "kanji"]}
 
 with st.sidebar:
     if not df.empty:
         days = sorted(df['Day'].unique(), key=lambda x: int(x.replace("일차", "")))
-        sel_day = st.selectbox("📅 구간", days)
-        if st.button("🔄 기록 초기화"): st.session_state.learned_list = set(); st.rerun()
+        sel_day = st.selectbox("구간", days)
+        if st.button("🔄 초기화"): st.session_state.learned = set(); st.rerun()
         if 'p_day' not in st.session_state or st.session_state.p_day != sel_day:
             st.session_state.idx = 0; st.session_state.p_day = sel_day
 
 # 필터링
 day_df = df[df['Day'] == sel_day].reset_index(drop=True)
-learned_count = len(day_df[day_df['GlobalID'].isin(st.session_state.learned_list)])
-display_df = day_df[~day_df['GlobalID'].isin(st.session_state.learned_list)].reset_index(drop=True)
+learned_in_day = [i for i in st.session_state.learned if i in day_df['GlobalID'].values]
+display_df = day_df[~day_df['GlobalID'].isin(st.session_state.learned)].reset_index(drop=True)
 
 if not display_df.empty:
     if st.session_state.idx >= len(display_df): st.session_state.idx = 0
     row = display_df.iloc[st.session_state.idx]
     
-    # 1. 현황판 (최상단 고정)
-    st.markdown(f'<div class="status-bar"><span>📍 {sel_day}</span><span>📊 {learned_count} / {len(day_df)}</span></div>', unsafe_allow_html=True)
-    st.progress(learned_count / len(day_df))
+    # 1. 현황판 (카드 바로 위로 이동)
+    st.markdown(f'<div class="status-text">📊 {len(learned_in_day)} / {len(day_df)}</div>', unsafe_allow_html=True)
+    st.progress(len(learned_in_day) / len(day_df))
 
     # 2. 단어 카드
     st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
-    # 3. 정답 확인 (한 줄 레이아웃)
+    # 3. 인라인 리빌 (가로 한 줄 강제 고정)
     def reveal_item(label, key, content, speech=False):
         if not st.session_state.show[key]:
             if st.button(f"👁️ {label}", key=f"btn_{key}", use_container_width=True):
                 st.session_state.show[key] = True; st.rerun()
         else:
-            c_text, c_btn = st.columns([4, 1])
+            # 버튼이 사라지고 그 자리에 [정답 박스 + 스피커] 한 줄 배치
+            c_text, c_spk = st.columns([4, 1])
             with c_text:
-                st.markdown(f'<div class="answer-text">{content}</div>', unsafe_allow_html=True)
-            with c_btn:
+                st.markdown(f'<div class="answer-box">{content}</div>', unsafe_allow_html=True)
+            with c_spk:
                 if speech:
-                    if st.button("🔊", key=f"spk_{key}"): play_audio_js(content)
+                    if st.button("🔊", key=f"spk_{key}"): play_voice(content)
                 else:
                     if st.button("X", key=f"cls_{key}"): st.session_state.show[key] = False; st.rerun()
 
@@ -121,12 +124,12 @@ if not display_df.empty:
     st.write("")
     cl, cr = st.columns(2)
     with cl:
-        if st.button("⏭️ 패스"):
+        if st.button("⏭️ 패스", use_container_width=True):
             st.session_state.idx = (st.session_state.idx + 1) % len(display_df)
             st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
     with cr:
-        if st.button("✅ 외웠다", type="primary"):
-            st.session_state.learned_list.add(row['GlobalID'])
+        if st.button("✅ 외웠다", type="primary", use_container_width=True):
+            st.session_state.learned.add(row['GlobalID'])
             st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
 else:
-    st.success("클리어!"); st.balloons()
+    st.balloons(); st.success("클리어!")
