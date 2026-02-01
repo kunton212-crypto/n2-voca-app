@@ -3,31 +3,30 @@ import pandas as pd
 import re
 import streamlit.components.v1 as components
 
-# 1. 페이지 설정 (가장 먼저 실행)
+# 1. 페이지 설정
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [핵심] CSS 스타일 강제 주입 (공백 이슈 원천 차단) ---
-# 주의: 이 문자열은 절대 수정하거나 들여쓰기 하지 마세요.
+# --- [스타일] 들여쓰기/공백 제거된 안전한 CSS ---
 fixed_css = """
 <style>
-/* 1. 기본 초기화 및 폰트 */
+/* 1. 기본 설정 */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
 *, *::before, *::after { box-sizing: border-box !important; }
 html, body, [class*="css"] { font-family: 'Noto Sans JP', sans-serif !important; }
 .stApp { background-color: #050505 !important; overflow-x: hidden !important; }
 
-/* 2. Streamlit 기본 UI 숨기기 */
+/* 2. UI 숨기기 */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-header {visibility: hidden;}
+header {visibility: hidden;} /* 상단바 숨김 (사이드바 버튼도 같이 숨겨짐 -> 기능을 메인으로 이동) */
 .block-container {
-    padding-top: 2rem !important;
+    padding-top: 1rem !important; /* 상단 여백 살짝 줄임 */
     padding-left: 0.5rem !important;
     padding-right: 0.5rem !important;
     max-width: 100vw !important;
 }
 
-/* 3. 모바일 레이아웃 (640px 이하 강제 Grid 적용) */
+/* 3. 모바일 레이아웃 (640px 이하 강제 Grid) */
 @media (max-width: 640px) {
     [data-testid="stHorizontalBlock"] {
         display: grid !important;
@@ -40,7 +39,6 @@ header {visibility: hidden;}
         flex: unset !important;
         min-width: 0 !important;
     }
-    /* 버튼 텍스트 줄바꿈 방지 */
     .stButton button {
         padding-left: 0px !important;
         padding-right: 0px !important;
@@ -49,10 +47,16 @@ header {visibility: hidden;}
     }
 }
 
-/* 4. 네온 테마 디자인 */
+/* 4. 디자인 테마 (네온) */
 :root { --neon: #00FFC6; --dark: #121212; }
 
-/* 현황판 */
+/* 콤보박스(Selectbox) 커스텀 */
+div[data-baseweb="select"] > div {
+    background-color: #111 !important;
+    border-color: #333 !important;
+    color: #fff !important;
+}
+
 .status-box {
     background-color: var(--dark);
     padding: 12px;
@@ -67,7 +71,6 @@ header {visibility: hidden;}
     font-size: 0.9rem;
 }
 
-/* 단어 카드 */
 .word-card {
     background: #111;
     padding: 35px 10px;
@@ -86,7 +89,6 @@ header {visibility: hidden;}
     letter-spacing: -1px;
 }
 
-/* 정답 텍스트 박스 */
 .ans-normal {
     background: #1a1a1a;
     color: #ddd;
@@ -101,7 +103,6 @@ header {visibility: hidden;}
     display: block;
 }
 
-/* 버튼 스타일 */
 .stButton>button {
     height: 50px !important;
     border-radius: 8px !important;
@@ -122,7 +123,6 @@ header {visibility: hidden;}
     background: #111 !important;
 }
 
-/* '암기 완료' 버튼 (Primary) */
 button[kind="primary"] {
     background: var(--neon) !important;
     border: none !important;
@@ -130,25 +130,15 @@ button[kind="primary"] {
     box-shadow: 0 0 15px rgba(0, 255, 198, 0.4) !important;
 }
 
-/* 기타 위젯 */
-.stToggle label, .stCheckbox label {
-    font-size: 12px !important;
-    color: #666 !important;
-}
-.stToggle, .stCheckbox {
-    transform: scale(0.9);
-    margin-right: -10px !important;
-}
-.stProgress > div > div > div > div {
-    background-color: var(--neon) !important;
-}
+.stToggle label, .stCheckbox label { font-size: 12px !important; color: #666 !important; }
+.stToggle, .stCheckbox { transform: scale(0.9); margin-right: -10px !important; }
+.stProgress > div > div > div > div { background-color: var(--neon) !important; }
 </style>
 """
 st.markdown(fixed_css, unsafe_allow_html=True)
 
 
 # --- [기능] 데이터 로드 ---
-# 구글 시트 주소
 SHEET_ID = "1KrgYU9dPGVWJgHeKJ4k4F6o0fqTtHvs7P5w7KmwSwwA"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
@@ -163,7 +153,7 @@ def load_data():
 
 df = load_data()
 
-# --- [기능] 자바스크립트 오디오 버튼 (중괄호 {{ }} 처리 완료) ---
+# --- [기능] 오디오 버튼 ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
     
@@ -209,24 +199,35 @@ def js_audio_button(text, key_suffix):
     """
     components.html(html_code, height=55, scrolling=False)
 
-# --- [로직] 세션 상태 관리 ---
+# --- [로직] 세션 관리 ---
 if 'idx' not in st.session_state: st.session_state.idx = 0
 if 'learned' not in st.session_state: st.session_state.learned = set()
 if 'show' not in st.session_state: st.session_state.show = {k:False for k in ["reading", "mean", "ex", "kanji"]}
 if 'shuffle_seed' not in st.session_state: st.session_state.shuffle_seed = 42
 
-# --- [사이드바] 설정 ---
-with st.sidebar:
-    if not df.empty:
-        days = sorted(df['Day'].unique(), key=lambda x: int(x.replace("일차", "")))
-        sel_day = st.selectbox("구간", days)
-        if st.button("🔄 리셋"): st.session_state.learned = set(); st.rerun()
-        if 'p_day' not in st.session_state or st.session_state.p_day != sel_day:
-            st.session_state.idx = 0; st.session_state.p_day = sel_day
+
+# --- [메인] 상단 컨트롤바 (사이드바 대체) ---
+if not df.empty:
+    days = sorted(df['Day'].unique(), key=lambda x: int(x.replace("일차", "")))
+    
+    # 1. 회차 선택 & 리셋 (모바일에서도 50:50 정렬됨)
+    top_c1, top_c2 = st.columns(2)
+    with top_c1:
+        # label_visibility="collapsed"로 라벨 숨겨서 깔끔하게
+        sel_day = st.selectbox("구간", days, label_visibility="collapsed")
+    with top_c2:
+        if st.button("🔄 리셋", use_container_width=True):
+            st.session_state.learned = set()
+            st.rerun()
+            
+    # 세션 업데이트
+    if 'p_day' not in st.session_state or st.session_state.p_day != sel_day:
+        st.session_state.idx = 0; st.session_state.p_day = sel_day
 
 day_df = df[df['Day'] == sel_day].copy()
 
-# --- [메인] 상단 컨트롤바 ---
+
+# 2. 순서 섞기 & 복습 모드
 c1, c2 = st.columns(2) 
 with c1: do_shuffle = st.toggle("순서 섞기", value=False)
 with c2: show_all = st.checkbox("복습 모드", value=False)
@@ -240,14 +241,14 @@ if not display_df.empty:
     if st.session_state.idx >= len(display_df): st.session_state.idx = 0
     row = display_df.iloc[st.session_state.idx]
     
-    # 1. 현황판
+    # 3. 현황판
     current_learned = len([i for i in st.session_state.learned if i in day_df['GlobalID'].values])
     st.markdown(f'<div class="status-box">DAY {sel_day.replace("일차","")} - PROGRESS {current_learned}/{len(day_df)}</div>', unsafe_allow_html=True)
 
-    # 2. 단어 카드
+    # 4. 단어 카드
     st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
-    # 3. 정답 및 음성 영역 (Grid 적용 확인 완료)
+    # 5. 정답 확인 및 오디오 (읽기/뜻 50:50)
     def reveal_section(label, key, content, has_voice=False):
         if not st.session_state.show[key]:
             if st.button(f"{label} 확인", key=f"btn_{key}", use_container_width=True):
@@ -258,18 +259,16 @@ if not display_df.empty:
             else:
                 st.markdown(f'<div class="ans-normal">{content}</div>', unsafe_allow_html=True)
 
-    # 읽기 / 뜻 병렬 배치
     c_read, c_mean = st.columns(2)
     with c_read:
         reveal_section("읽기", "reading", row.iloc[2], has_voice=True)
     with c_mean:
         reveal_section("뜻", "mean", row.iloc[3])
     
-    # 나머지는 한 줄
     reveal_section("예문", "ex", row.iloc[4], has_voice=True)
     reveal_section("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
-    # 4. 하단 액션 버튼
+    # 6. 하단 이동 버튼
     st.write("")
     cl, cr = st.columns(2)
     with cl:
@@ -281,7 +280,7 @@ if not display_df.empty:
             st.session_state.learned.add(row['GlobalID'])
             st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
 
-    # 5. 레벨 바
+    # 7. 레벨 바
     total_learned = len(st.session_state.learned)
     user_level = (total_learned // 10) + 1
     exp_in_level = total_learned % 10
