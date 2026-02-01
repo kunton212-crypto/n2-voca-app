@@ -9,24 +9,32 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] 모바일 레이아웃 '진짜' 강제 고정 ---
+# --- [스타일] 가로 스크롤 방지 & 레이아웃 완벽 고정 ---
 st.markdown("""
     <style>
     .stApp { background-color: #000000 !important; }
-    .block-container { padding-top: 3.5rem !important; }
     
-    /* [핵심] 모바일에서 컬럼이 쌓이는 걸 막는 강력한 CSS */
-    [data-testid="column"] {
-        width: 50% !important;
-        flex: 1 1 50% !important;
-        min-width: 50% !important;
+    /* [핵심] 전체 컨테이너가 화면 폭을 넘지 않도록 제한 */
+    .block-container { 
+        padding-top: 3.5rem !important; 
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
     }
     
-    /* 컬럼을 감싸는 부모 컨테이너가 줄바꿈 하지 않도록 강제 */
+    /* [핵심] 컬럼 레이아웃: 강제 50%가 아니라 '비율(Flex)'로 공간 나눔 */
     [data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
+        display: flex !important;
         flex-wrap: nowrap !important;
-        gap: 10px !important;
+        width: 100% !important;
+        gap: 8px !important; /* 간격 조금 줄임 */
+    }
+    
+    [data-testid="column"] {
+        flex: 1 !important;       /* 남은 공간을 공평하게 1씩 나눠가짐 */
+        width: auto !important;
+        min-width: 0px !important; /* 내용이 많아도 뚫고 나가지 않게 축소 허용 */
     }
     
     /* 텍스트 및 박스 스타일 */
@@ -41,23 +49,21 @@ st.markdown("""
     }
     .japanese-word { font-size: 3.2rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; }
     
-    /* 정답 텍스트 박스 */
     .ans-normal {
         background: #262626; color: #FFFFFF; padding: 12px; width: 100%;
         border-radius: 8px; text-align: center; font-weight: bold; 
         margin-bottom: 6px; border: 1px solid #555; display: block;
     }
     
-    /* 버튼 스타일 */
-    .stButton>button { height: 48px !important; border-radius: 12px !important; font-weight: bold !important; }
+    .stButton>button { height: 48px !important; border-radius: 12px !important; font-weight: bold !important; width: 100% !important; }
     
-    /* 토글/체크박스 간격 조절 */
+    /* 토글/체크박스 간격 미세 조정 */
     .stToggle { margin-top: -5px; }
     .stCheckbox { margin-top: -5px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- [자바스크립트] 일본어 성우 스마트 선택 ---
+# --- [자바스크립트] Kyoko 소환술 ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
     
@@ -87,18 +93,13 @@ def js_audio_button(text, key_suffix):
                 msg.lang = 'ja-JP';
                 msg.rate = 1.0; 
 
-                // 사용 가능한 목소리 가져오기
                 let voices = window.speechSynthesis.getVoices();
-                
-                // [우선순위] 1. Siri(혹시 열려있다면) 2. Kyoko(고음질) 3. Otoya 4. 아무 일본어
-                let jaVoice = voices.find(v => v.name.includes('Siri') && v.lang === 'ja-JP') ||
-                              voices.find(v => v.name.includes('Kyoko')) || 
+                let jaVoice = voices.find(v => v.name.includes('Kyoko')) || 
                               voices.find(v => v.name.includes('Otoya')) ||
                               voices.find(v => v.lang === 'ja-JP');
                 
                 if (jaVoice) {{
                     msg.voice = jaVoice;
-                    console.log("Selected voice: " + jaVoice.name);
                 }}
                 
                 window.speechSynthesis.speak(msg);
@@ -141,8 +142,8 @@ with st.sidebar:
 
 day_df = df[df['Day'] == sel_day].copy()
 
-# [수정] 모바일 레이아웃: st.columns는 잊고 HTML/CSS로 제어되는 컨테이너 사용
-col1, col2 = st.columns([1, 1]) # 비율 1:1 강제
+# [수정] 모바일 레이아웃: 비율(1:1)로 설정하여 화면을 꽉 채우되 넘치지 않게 함
+col1, col2 = st.columns([1, 1])
 with col1:
     do_shuffle = st.toggle("🔀 순서 섞기", value=False)
 with col2:
@@ -180,7 +181,7 @@ if not display_df.empty:
     reveal_section("예문", "ex", row.iloc[4], has_voice=True)
     reveal_section("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
-    # 4. 하단 버튼
+    # 4. 하단 버튼 (이것도 자동으로 비율 조정됨)
     st.write("")
     cl, cr = st.columns(2)
     with cl:
