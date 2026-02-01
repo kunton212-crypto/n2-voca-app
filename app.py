@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-from gtts import gTTS
-from io import BytesIO
+import re
+import streamlit.components.v1 as components
 
 # 구글 시트 주소
 SHEET_ID = "1KrgYU9dPGVWJgHeKJ4k4F6o0fqTtHvs7P5w7KmwSwwA"
@@ -9,15 +9,12 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] 디자인 유지 + 오디오 플레이어 숨기기 ---
+# --- [스타일] ---
 st.markdown("""
     <style>
     .stApp { background-color: #000000 !important; }
-    .block-container { padding-top: 3rem !important; }
+    .block-container { padding-top: 3.5rem !important; }
     
-    /* 오디오 플레이어 숨기기 (소리는 나고 화면엔 안 보임) */
-    .stAudio { display: none !important; }
-
     .status-box {
         background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
@@ -30,33 +27,66 @@ st.markdown("""
     }
     .japanese-word { font-size: 3.2rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; }
 
-    /* 정답 박스 (버튼처럼 보이게) */
-    .ans-btn { 
-        background: #262626; color: #00FFAA; padding: 12px; width: 100%;
-        border-radius: 8px; text-align: center; font-weight: bold; 
-        margin-bottom: 6px; border: 1px solid #00FFAA; display: block;
-    }
-    .ans-text {
+    /* 일반 텍스트 박스 (소리 없는 항목용) */
+    .ans-normal {
         background: #262626; color: #FFFFFF; padding: 12px; width: 100%;
         border-radius: 8px; text-align: center; font-weight: bold; 
         margin-bottom: 6px; border: 1px solid #555; display: block;
     }
     
     .stButton>button { height: 48px !important; border-radius: 12px !important; font-weight: bold !important; }
-    .growth-log {
-        margin-top: 15px; padding: 10px; background: #111; border-radius: 10px;
-        border: 1px dashed #444; text-align: center;
-    }
-    .level-text { color: #FFD700 !important; font-size: 0.9rem; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- [정석] gTTS를 이용한 고음질 오디오 생성 ---
-def get_audio_bytes(text):
-    sound_file = BytesIO()
-    tts = gTTS(text, lang='ja')
-    tts.write_to_fp(sound_file)
-    return sound_file
+# --- [필살기] 아이폰 전용 HTML 버튼 생성기 ---
+# 파이썬이 아닌, 브라우저가 직접 실행하는 버튼을 만듭니다.
+def js_audio_button(text, key_suffix):
+    clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
+    
+    # HTML/JS 코드를 직접 심습니다.
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        body {{ margin: 0; padding: 0; background-color: transparent; }}
+        .voice-btn {{
+            width: 100%;
+            height: 48px;
+            background-color: #262626;
+            color: #00FFAA;
+            border: 1.5px solid #00FFAA;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: "Source Sans Pro", sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }}
+        .voice-btn:active {{
+            background-color: #333333;
+        }}
+    </style>
+    </head>
+    <body>
+        <button class="voice-btn" onclick="speak()">🔊 {text}</button>
+        <script>
+            function speak() {{
+                window.speechSynthesis.cancel();
+                const msg = new SpeechSynthesisUtterance('{clean_text}');
+                msg.lang = 'ja-JP';
+                msg.rate = 1.0;
+                window.speechSynthesis.speak(msg);
+            }}
+        </script>
+    </body>
+    </html>
+    """
+    # Streamlit 화면에 iframe으로 끼워넣기 (높이 50px 고정)
+    components.html(html_code, height=50)
 
 @st.cache_data(ttl=60)
 def load_data():
@@ -72,6 +102,7 @@ df = load_data()
 if 'idx' not in st.session_state: st.session_state.idx = 0
 if 'learned' not in st.session_state: st.session_state.learned = set()
 if 'show' not in st.session_state: st.session_state.show = {k:False for k in ["reading", "mean", "ex", "kanji"]}
+if 'shuffle_seed' not in st.session_state: st.session_state.shuffle_seed = 42
 
 with st.sidebar:
     if not df.empty:
@@ -83,39 +114,50 @@ with st.sidebar:
         if 'p_day' not in st.session_state or st.session_state.p_day != sel_day:
             st.session_state.idx = 0; st.session_state.p_day = sel_day
 
-day_df = df[df['Day'] == sel_day].reset_index(drop=True)
-total_learned = len(st.session_state.learned) 
-current_day_learned = [i for i in st.session_state.learned if i in day_df['GlobalID'].values]
-display_df = day_df[~day_df['GlobalID'].isin(st.session_state.learned)].reset_index(drop=True)
+# 데이터 필터링
+day_df = df[df['Day'] == sel_day].copy()
+
+# 상단 셔플 토글
+col_shuffle, col_all = st.columns(2)
+with col_shuffle:
+    do_shuffle = st.toggle("🔀 순서 섞기", value=False)
+with col_all:
+    show_all = st.checkbox("✅ 복습 모드", value=False)
+
+if do_shuffle:
+    day_df = day_df.sample(frac=1, random_state=st.session_state.shuffle_seed).reset_index(drop=True)
+
+display_df = day_df if show_all else day_df[~day_df['GlobalID'].isin(st.session_state.learned)].reset_index(drop=True)
 
 if not display_df.empty:
     if st.session_state.idx >= len(display_df): st.session_state.idx = 0
     row = display_df.iloc[st.session_state.idx]
     
     # 1. 현황판
-    st.markdown(f'<div class="status-box">📊 {sel_day} : {len(current_day_learned)} / {len(day_df)}</div>', unsafe_allow_html=True)
+    total_learned = len(st.session_state.learned)
+    current_learned = len([i for i in st.session_state.learned if i in day_df['GlobalID'].values])
+    st.markdown(f'<div class="status-box">📊 {sel_day} : {current_learned} / {len(day_df)}</div>', unsafe_allow_html=True)
 
     # 2. 단어 카드
     st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
-    # 3. 정답 확인 및 음성 재생
+    # 3. 정답 및 음성 버튼 로직
     def reveal_section(label, key, content, has_voice=False):
-        # 1) 아직 안 뒤집었을 때
+        # 1) 아직 안 봤을 때: Streamlit 버튼 (파이썬 제어)
         if not st.session_state.show[key]:
-            if st.button(f"👁️ {label} 확인", key=f"btn_{key}"):
-                st.session_state.show[key] = True; st.rerun()
+            if st.button(f"👁️ {label} 확인", key=f"btn_{key}", use_container_width=True):
+                st.session_state.show[key] = True
+                st.rerun()
         
-        # 2) 뒤집었을 때
+        # 2) 봤을 때:
         else:
             if has_voice:
-                # 소리 나는 항목은 버튼으로 표시 (누르면 소리 남)
-                if st.button(f"🔊 {content}", key=f"play_{key}"):
-                    # 여기서 서버가 만든 진짜 오디오 파일을 재생
-                    sound = get_audio_bytes(content)
-                    st.audio(sound, format='audio/mp3', autoplay=True)
+                # [중요] 소리나는 항목은 'HTML 버튼'으로 교체
+                # 이 버튼은 파이썬을 거치지 않고 브라우저에서 바로 소리를 냅니다.
+                js_audio_button(content, key)
             else:
-                # 소리 없는 항목은 그냥 텍스트 박스
-                st.markdown(f'<div class="ans-text">{content}</div>', unsafe_allow_html=True)
+                # 소리 없는 항목은 그냥 텍스트
+                st.markdown(f'<div class="ans-normal">{content}</div>', unsafe_allow_html=True)
 
     reveal_section("읽기", "reading", row.iloc[2], has_voice=True)
     reveal_section("뜻", "mean", row.iloc[3])
@@ -128,17 +170,23 @@ if not display_df.empty:
     with cl:
         if st.button("⏭️ 패스", use_container_width=True):
             st.session_state.idx = (st.session_state.idx + 1) % len(display_df)
-            st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
+            st.session_state.show = {k:False for k in st.session_state.show}
+            st.rerun()
     with cr:
         if st.button("✅ 외웠다", type="primary", use_container_width=True):
             st.session_state.learned.add(row['GlobalID'])
-            st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
+            st.session_state.show = {k:False for k in st.session_state.show}
+            st.rerun()
 
-    # 5. 성장 로그
+    # 5. 레벨 바
     user_level = (total_learned // 10) + 1
     exp_in_level = total_learned % 10
-    st.markdown(f'<div class="growth-log"><span class="level-text">🔥 LV.{user_level} (누적 {total_learned}개)</span></div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="margin-top:15px; padding:10px; background:#111; border-radius:10px; border:1px dashed #444; text-align:center;">
+        <span style="color:#FFD700; font-weight:bold;">🔥 LV.{user_level} (총 {total_learned}개)</span>
+    </div>
+    """, unsafe_allow_html=True)
     st.progress(exp_in_level / 10)
 
 else:
-    st.balloons(); st.success("클리어!")
+    st.balloons(); st.success("오늘 분량 끝!")
