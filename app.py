@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
+import urllib.parse
 import streamlit.components.v1 as components
 
 # 구글 시트 주소
@@ -37,9 +38,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [핵심 수정] 일본어 목소리 강제 선택 기능 추가 ---
+# --- [핵심] 구글 서버 음성 직접 호출 (고음질) ---
 def js_audio_button(text, key_suffix):
+    # 텍스트 전처리 (특수문자 제거)
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
+    # URL 인코딩 (일본어를 인터넷 주소 형식으로 변환)
+    encoded_text = urllib.parse.quote(clean_text)
+    
+    # 구글 번역 TTS 서버 주소
+    tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={encoded_text}&tl=ja&client=tw-ob"
     
     html_code = f"""
     <!DOCTYPE html>
@@ -59,30 +66,12 @@ def js_audio_button(text, key_suffix):
     </style>
     </head>
     <body>
-        <button class="voice-btn" onclick="speak()">🔊 {text}</button>
+        <button class="voice-btn" onclick="playAudio()">🔊 {text}</button>
         <script>
-            function speak() {{
-                window.speechSynthesis.cancel();
-                const msg = new SpeechSynthesisUtterance('{clean_text}');
-                msg.lang = 'ja-JP'; 
-                msg.rate = 1.0;
-
-                // [중요] 기기에서 사용 가능한 목소리 목록을 가져와서 일본어 목소리 강제 지정
-                let voices = window.speechSynthesis.getVoices();
-                // 일본어 목소리 찾기 (Google, Apple, Microsoft 순으로 우선순위)
-                let jaVoice = voices.find(v => v.lang === 'ja-JP' && v.name.includes('Google')) || 
-                              voices.find(v => v.lang === 'ja-JP');
-                
-                if (jaVoice) {{
-                    msg.voice = jaVoice;
-                }}
-                
-                window.speechSynthesis.speak(msg);
+            function playAudio() {{
+                var audio = new Audio('{tts_url}');
+                audio.play();
             }}
-            // 목소리 로딩이 비동기일 수 있어서 한 번 더 호출해줌
-            window.speechSynthesis.onvoiceschanged = () => {{
-                window.speechSynthesis.getVoices();
-            }};
         </script>
     </body>
     </html>
@@ -139,7 +128,7 @@ if not display_df.empty:
     # 2. 단어 카드
     st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
-    # 3. 정답 및 음성 버튼 로직
+    # 3. 정답 및 음성 버튼
     def reveal_section(label, key, content, has_voice=False):
         if not st.session_state.show[key]:
             if st.button(f"👁️ {label} 확인", key=f"btn_{key}", use_container_width=True):
