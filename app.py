@@ -9,49 +9,56 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="JLPT N2", page_icon="🎴", layout="centered")
 
-# --- [스타일] 화면 폭 수학적 계산 (calc) 적용 ---
+# --- [스타일] 모바일 전용(@media) 강제 정렬 CSS ---
 st.markdown("""
     <style>
-    /* 1. 기본 초기화 */
-    *, *::before, *::after { box-sizing: border-box !important; }
-    .stApp { background-color: #000000 !important; overflow-x: hidden !important; }
+    /* 기본 설정: 가로 스크롤 방지 */
+    .stApp { 
+        background-color: #000000 !important; 
+        overflow-x: hidden !important;
+    }
     
-    /* 2. 전체 컨테이너 여백 최소화 */
+    /* 전체 컨테이너 여백 극한으로 줄이기 */
     .block-container { 
         padding-top: 3rem !important; 
-        padding-left: 5px !important; 
-        padding-right: 5px !important;
+        padding-left: 2px !important; 
+        padding-right: 2px !important;
         max-width: 100vw !important;
     }
-    
-    /* 3. [핵심] 컬럼이 절대 화면을 넘지 않게 '빼기' 계산 적용 */
-    [data-testid="column"] {
-        /* 50%에서 여백(10px)을 뺀 크기로 강제 지정 -> 절대 안 넘침 */
-        width: calc(50% - 5px) !important;
-        flex: 1 1 calc(50% - 5px) !important;
-        min-width: 0 !important;
+
+    /* [핵심] 모바일 화면(폭 640px 이하)에서만 발동하는 강제 명령 */
+    @media (max-width: 640px) {
+        /* 가로 배치 강제 (Streamlit이 세로로 바꾸는 걸 막음) */
+        [data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 5px !important;
+        }
+        
+        /* 컬럼 너비 강제 50:50 */
+        [data-testid="column"] {
+            width: 50% !important;
+            flex: 0 0 50% !important;
+            min-width: 50% !important;
+            max-width: 50% !important;
+        }
+        
+        /* 버튼 텍스트 크기 자동 조절 */
+        .stButton button {
+            padding-left: 5px !important;
+            padding-right: 5px !important;
+        }
     }
     
-    /* 컬럼 부모 컨테이너 설정 */
-    [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 10px !important; /* 컬럼 사이 간격 */
-        width: 100% !important;
-    }
-    
-    /* 4. 위젯 강제 축소 (아이폰 화면 밖으로 나가는 주범) */
+    /* 위젯 크기 조절 */
     .stToggle, .stCheckbox {
         white-space: nowrap !important;
-        overflow: hidden !important;
-        transform: scale(0.85); /* 크기를 줄여서 공간 확보 */
+        transform: scale(0.85);
         transform-origin: left center;
-        width: 110% !important; /* 잘림 방지용 */
         margin-right: -20px !important;
     }
     
-    /* 디자인 요소 */
+    /* 디자인 요소들 */
     .status-box {
         background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
@@ -61,7 +68,7 @@ st.markdown("""
         background-color: #1A1A1A; padding: 25px 10px; border-radius: 15px; 
         border: 1px solid #444; text-align: center; margin-bottom: 10px; width: 100%;
     }
-    .japanese-word { font-size: 3rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; word-break: keep-all; }
+    .japanese-word { font-size: 3rem !important; color: #FFFFFF !important; margin: 0; font-weight: 800; }
     
     .ans-normal {
         background: #262626; color: #FFFFFF; padding: 12px; width: 100%;
@@ -73,11 +80,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- [자바스크립트] Kyoko 소환 ---
+# --- [자바스크립트] Kyoko 소환 (이전과 동일) ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
     
-    # iframe 자체의 스크롤바 제거 및 폭 맞춤
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -118,7 +124,6 @@ def js_audio_button(text, key_suffix):
     </body>
     </html>
     """
-    # iframe 너비도 100%로 확실하게 지정
     components.html(html_code, height=50, scrolling=False)
 
 @st.cache_data(ttl=60)
@@ -149,8 +154,8 @@ with st.sidebar:
 
 day_df = df[df['Day'] == sel_day].copy()
 
-# [수정] 컬럼 선언 시에도 간격(gap)을 "small"로 지정하여 CSS 보조
-c1, c2 = st.columns(2, gap="small")
+# [수정] 간격 0으로 설정
+c1, c2 = st.columns([1, 1], gap="small") 
 with c1:
     do_shuffle = st.toggle("🔀 순서 섞기", value=False)
 with c2:
@@ -188,9 +193,9 @@ if not display_df.empty:
     reveal_section("예문", "ex", row.iloc[4], has_voice=True)
     reveal_section("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
-    # 4. 하단 버튼 (간격 small로 지정)
+    # 4. 하단 버튼
     st.write("")
-    cl, cr = st.columns(2, gap="small")
+    cl, cr = st.columns([1, 1], gap="small")
     with cl:
         if st.button("⏭️ 패스", use_container_width=True):
             st.session_state.idx = (st.session_state.idx + 1) % len(display_df)
