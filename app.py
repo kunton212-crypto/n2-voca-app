@@ -2,85 +2,17 @@ import streamlit as st
 import pandas as pd
 import re
 import streamlit.components.v1 as components
-import textwrap
 
 # 1. 페이지 설정
 st.set_page_config(page_title="JLPT N2 MASTER", page_icon="🎴", layout="centered")
 
-# --- [스타일] 디자인 및 레이아웃 강제 고정 ---
-# f-string 에러 방지를 위해 일반 문자열로 작성 후 주입
-css_code = """
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-/* 기본 초기화 */
-*, *::before, *::after { box-sizing: border-box !important; }
-html, body, [class*="css"] { font-family: 'Noto Sans JP', sans-serif !important; }
-.stApp { background-color: #050505 !important; overflow-x: hidden !important; }
+# --- [핵심 수정] CSS 한 줄 압축 (텍스트 출력 버그 100% 차단) ---
+# 주석을 모두 지우고 한 줄로 만들어서 에디터 자동 정렬의 영향을 받지 않게 했습니다.
+st.markdown("""
+<style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');*,*::before,*::after{box-sizing:border-box !important;}html,body,[class*="css"]{font-family:'Noto Sans JP',sans-serif !important;}.stApp{background-color:#050505 !important;overflow-x:hidden !important;}#MainMenu,footer,header{visibility:hidden;}.block-container{padding-top:1.5rem !important;padding-left:10px !important;padding-right:10px !important;max-width:100vw !important;}@media(max-width:640px){[data-testid="stHorizontalBlock"]{display:grid !important;grid-template-columns:1fr 1fr !important;gap:10px !important;width:100% !important;}[data-testid="column"]{width:auto !important;flex:unset !important;min-width:0 !important;}.stButton button{font-size:0.85rem !important;padding:0 !important;}}:root{--neon:#00FFC6;--dark:#121212;}.status-box{background-color:var(--dark);padding:12px;border-radius:10px;color:var(--neon) !important;font-weight:bold;text-align:center;margin-bottom:15px;width:100%;border:1px solid #333;box-shadow:0 0 10px rgba(0,255,198,0.2);}.word-card{background:linear-gradient(145deg,#111,#050505);padding:40px 10px;border-radius:20px;border:1px solid #333;text-align:center;margin-bottom:20px;}.japanese-word{font-size:3.5rem !important;color:#fff !important;margin:0;font-weight:900;}.ans-normal{background:#1a1a1a;color:#ccc;padding:15px;width:100%;border-radius:10px;text-align:center;font-weight:500;margin-bottom:8px;border:1px solid #333;display:block;}.stButton>button{height:52px !important;border-radius:12px !important;font-weight:700 !important;width:100% !important;background:#000 !important;border:1px solid #444 !important;color:#888 !important;}.stButton>button:hover{border-color:var(--neon) !important;color:var(--neon) !important;}button[kind="primary"]{background:var(--neon) !important;border:none !important;color:#000 !important;box-shadow:0 0 15px rgba(0,255,198,0.4) !important;}.stToggle label,.stCheckbox label{font-size:13px !important;color:#777 !important;}.stProgress>div>div>div>div{background-color:var(--neon) !important;}div[data-baseweb="select"]>div{background-color:#111 !important;color:white !important;}</style>
+""", unsafe_allow_html=True)
 
-/* UI 요소 숨기기 */
-#MainMenu, footer, header { visibility: hidden; }
-.block-container { 
-    padding-top: 1.5rem !important; 
-    padding-left: 10px !important; padding-right: 10px !important;
-    max-width: 100vw !important;
-}
-
-/* 모바일 2열 Grid 강제 고정 */
-@media (max-width: 640px) {
-    [data-testid="stHorizontalBlock"] {
-        display: grid !important; 
-        grid-template-columns: 1fr 1fr !important;
-        gap: 10px !important; 
-        width: 100% !important;
-    }
-    [data-testid="column"] { width: auto !important; flex: unset !important; min-width: 0 !important; }
-    .stButton button { font-size: 0.85rem !important; padding: 0 !important; }
-}
-
-/* 테마 디자인 */
-:root { --neon: #00FFC6; --dark: #121212; }
-
-.status-box {
-    background-color: var(--dark); padding: 12px; border-radius: 10px;
-    color: var(--neon) !important; font-weight: bold; text-align: center;
-    margin-bottom: 15px; width: 100%; border: 1px solid #333;
-    box-shadow: 0 0 10px rgba(0, 255, 198, 0.2);
-}
-
-.word-card { 
-    background: linear-gradient(145deg, #111, #050505);
-    padding: 40px 10px; border-radius: 20px; 
-    border: 1px solid #333; text-align: center; margin-bottom: 20px;
-}
-.japanese-word { font-size: 3.5rem !important; color: #fff !important; margin: 0; font-weight: 900; }
-
-.ans-normal {
-    background: #1a1a1a; color: #ccc; padding: 15px; width: 100%;
-    border-radius: 10px; text-align: center; font-weight: 500;
-    margin-bottom: 8px; border: 1px solid #333; display: block;
-}
-
-.stButton>button { 
-    height: 52px !important; border-radius: 12px !important; 
-    font-weight: 700 !important; width: 100% !important;
-    background: #000 !important; border: 1px solid #444 !important; color: #888 !important;
-}
-.stButton>button:hover { border-color: var(--neon) !important; color: var(--neon) !important; }
-button[kind="primary"] {
-    background: var(--neon) !important; border: none !important; color: #000 !important;
-    box-shadow: 0 0 15px rgba(0, 255, 198, 0.4) !important;
-}
-
-.stToggle label, .stCheckbox label { font-size: 13px !important; color: #777 !important; }
-.stProgress > div > div > div > div { background-color: var(--neon) !important; }
-
-/* 콤보박스 색상 */
-div[data-baseweb="select"] > div { background-color: #111 !important; color: white !important; }
-</style>
-"""
-st.markdown(css_code, unsafe_allow_html=True)
-
-# --- [기능] 데이터 및 로직 ---
+# --- [기능] 데이터 로드 ---
 SHEET_ID = "1KrgYU9dPGVWJgHeKJ4k4F6o0fqTtHvs7P5w7KmwSwwA"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
@@ -95,8 +27,10 @@ def load_data():
 
 df = load_data()
 
+# --- [기능] 오디오 버튼 ---
 def js_audio_button(text, key_suffix):
     clean_text = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "")
+    # 자바스크립트 중괄호 에러 방지를 위해 f-string 대신 일반 문자열 포맷팅 사용 권장하나, 여기선 이중 중괄호 적용됨
     html_code = f"""
     <html>
     <head>
@@ -128,7 +62,7 @@ def js_audio_button(text, key_suffix):
     """
     components.html(html_code, height=60, scrolling=False)
 
-# 세션 관리
+# --- [로직] 세션 관리 ---
 if 'idx' not in st.session_state: st.session_state.idx = 0
 if 'learned' not in st.session_state: st.session_state.learned = set()
 if 'show' not in st.session_state: st.session_state.show = {k:False for k in ["reading", "mean", "ex", "kanji"]}
@@ -138,9 +72,11 @@ if 'shuffle_seed' not in st.session_state: st.session_state.shuffle_seed = 42
 if not df.empty:
     days = sorted(df['Day'].unique(), key=lambda x: int(x.replace("일차", "")))
     
-    # 상단 회차 선택 및 리셋
+    # 1. 상단 회차 선택 및 리셋
     t_c1, t_c2 = st.columns(2)
-    with t_c1: sel_day = st.selectbox("DAY", days, label_visibility="collapsed")
+    with t_c1: 
+        # 라벨 숨김 처리 (label_visibility)
+        sel_day = st.selectbox("DAY", days, label_visibility="collapsed")
     with t_c2: 
         if st.button("🔄 리셋", use_container_width=True):
             st.session_state.learned = set(); st.rerun()
@@ -150,7 +86,7 @@ if not df.empty:
 
     day_df = df[df['Day'] == sel_day].copy()
 
-    # 옵션
+    # 2. 옵션 버튼
     o1, o2 = st.columns(2)
     with o1: do_shuffle = st.toggle("순서 섞기", value=False)
     with o2: show_all = st.checkbox("복습 모드", value=False)
@@ -164,10 +100,12 @@ if not df.empty:
         if st.session_state.idx >= len(display_df): st.session_state.idx = 0
         row = display_df.iloc[st.session_state.idx]
         
+        # 3. 현황판 & 단어
         current_learned = len([i for i in st.session_state.learned if i in day_df['GlobalID'].values])
         st.markdown(f'<div class="status-box">PROGRESS {current_learned}/{len(day_df)}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
+        # 4. 정답 확인 (읽기/뜻 50:50)
         def reveal(label, key, content, has_voice=False):
             if not st.session_state.show[key]:
                 if st.button(f"{label} 확인", key=f"btn_{key}", use_container_width=True):
@@ -179,6 +117,7 @@ if not df.empty:
         c_r, c_m = st.columns(2)
         with c_r: reveal("읽기", "reading", row.iloc[2], True)
         with c_m: reveal("뜻", "mean", row.iloc[3])
+        
         reveal("예문", "ex", row.iloc[4], True)
         reveal("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
@@ -193,12 +132,14 @@ if not df.empty:
                 st.session_state.learned.add(row['GlobalID'])
                 st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
 
-        # --- [레벨링 시스템] ---
+        # 5. 레벨링 시스템 (117회차 지수함수 난이도 적용)
         total_learned = len(st.session_state.learned)
-        max_words = 3510  # 117회차 총 예상 단어수
+        max_words = 3510  # 117회차 예상 단어수
+        
         if total_learned == 0:
             u_lv, p_val = 1, 0.0
         else:
+            # 지수함수 레벨링 공식
             raw_lv = ((total_learned / max_words) ** 0.7) * 99 + 1
             u_lv = int(raw_lv)
             p_val = raw_lv - u_lv
