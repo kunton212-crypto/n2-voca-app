@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import random
-import re
 
 # 구글 시트 주소
 SHEET_ID = "1KrgYU9dPGVWJgHeKJ4k4F6o0fqTtHvs7P5w7KmwSwwA"
@@ -9,54 +7,35 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="N2", page_icon="🎴", layout="centered")
 
-# --- [초압축 디자인] 버튼 삭제 및 터치 영역 최적화 ---
+# --- [스타일] 현황판 하강 및 디자인 고정 ---
 st.markdown("""
     <style>
     .stApp { background-color: #000000 !important; }
-    .block-container { padding-top: 1.5rem !important; padding-bottom: 0px !important; }
+    /* 사파리 상단바 피하기 위해 여백 넉넉히 */
+    .block-container { padding-top: 4rem !important; }
     
-    /* 현황판 */
     .status-box {
-        background-color: #1E1E1E; padding: 8px; border-radius: 8px;
+        background-color: #1E1E1E; padding: 10px; border-radius: 10px;
         color: #00FFAA !important; font-weight: bold; text-align: center;
-        margin-bottom: 8px; font-size: 0.9rem;
+        margin-bottom: 10px; border: 2px solid #00FFAA; font-size: 1rem;
     }
 
-    /* 단어 카드 */
     .word-card { 
-        background-color: #1A1A1A; padding: 20px 10px; border-radius: 12px; 
+        background-color: #1A1A1A; padding: 25px 10px; border-radius: 15px; 
         border: 1px solid #444; text-align: center; margin-bottom: 10px;
     }
-    .japanese-word { font-size: 2.8rem !important; color: #FFFFFF !important; margin: 0; }
+    .japanese-word { font-size: 3rem !important; color: #FFFFFF !important; margin: 0; }
 
-    /* 정답 터치 박스 (클릭 가능한 느낌을 줌) */
-    .ans-clickable { 
-        background: #262626; color: #00FFAA; padding: 12px; 
-        border-radius: 8px; text-align: center; font-weight: bold; 
-        margin-bottom: 5px; border: 1px solid #00FFAA;
-        cursor: pointer;
-    }
-    .ans-normal {
+    .ans-box { 
         background: #262626; color: #FFFFFF; padding: 12px; 
         border-radius: 8px; text-align: center; font-weight: bold; 
-        margin-bottom: 5px; border: 1px solid #444;
+        margin-bottom: 6px; border: 1px solid #555;
     }
-
-    /* 하단 조작 버튼 크기 축소 */
-    .stButton>button { height: 42px !important; border-radius: 8px !important; }
+    
+    /* 스위치/체크박스 텍스트 색상 */
+    .stCheckbox label { color: #FFFFFF !important; font-size: 0.9rem; }
     </style>
     """, unsafe_allow_html=True)
-
-# --- 자바스크립트 음성 재생 함수 ---
-def play_voice(text):
-    clean = re.sub(r'[\(（].*?[\)）]', '', text).replace('*', '').replace("'", "\\'")
-    tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={clean}&tl=ja&client=tw-ob"
-    st.components.v1.html(f"""
-        <script>
-            var audio = new Audio("{tts_url}");
-            audio.play();
-        </script>
-    """, height=0)
 
 @st.cache_data(ttl=60)
 def load_data():
@@ -69,64 +48,80 @@ def load_data():
 
 df = load_data()
 
+# 세션 상태 초기화
 if 'idx' not in st.session_state: st.session_state.idx = 0
 if 'learned' not in st.session_state: st.session_state.learned = set()
 if 'show' not in st.session_state: st.session_state.show = {k:False for k in ["reading", "mean", "ex", "kanji"]}
+if 'shuffle_seed' not in st.session_state: st.session_state.shuffle_seed = 42
 
-# 사이드바
+# 사이드바 (일차 선택 전용)
 with st.sidebar:
     if not df.empty:
         days = sorted(df['Day'].unique(), key=lambda x: int(x.replace("일차", "")))
-        sel_day = st.selectbox("구간", days)
-        if st.button("🔄 초기화"): st.session_state.learned = set(); st.rerun()
+        sel_day = st.selectbox("구간 선택", days)
+        if st.button("🔄 기록 초기화"): 
+            st.session_state.learned = set()
+            st.rerun()
         if 'p_day' not in st.session_state or st.session_state.p_day != sel_day:
-            st.session_state.idx = 0; st.session_state.p_day = sel_day
+            st.session_state.idx = 0
+            st.session_state.p_day = sel_day
 
-day_df = df[df['Day'] == sel_day].reset_index(drop=True)
+# --- 데이터 필터링 및 섞기 로직 ---
+day_df = df[df['Day'] == sel_day].copy()
+
+# 메인 화면 상단 설정 (현황판 위쪽)
+col_shuffle, col_all = st.columns(2)
+with col_shuffle:
+    do_shuffle = st.toggle("🔀 순서 섞기", value=False)
+with col_all:
+    show_all = st.checkbox("✅ 외운단어 포함", value=False)
+
+if do_shuffle:
+    day_df = day_df.sample(frac=1, random_state=st.session_state.shuffle_seed).reset_index(drop=True)
+
 learned_in_day = [i for i in st.session_state.learned if i in day_df['GlobalID'].values]
-display_df = day_df[~day_df['GlobalID'].isin(st.session_state.learned)].reset_index(drop=True)
+display_df = day_df if show_all else day_df[~day_df['GlobalID'].isin(st.session_state.learned)].reset_index(drop=True)
 
+# --- 화면 출력 ---
 if not display_df.empty:
     if st.session_state.idx >= len(display_df): st.session_state.idx = 0
     row = display_df.iloc[st.session_state.idx]
     
     # 1. 현황판
-    st.markdown(f'<div class="status-box">📊 {sel_day}: {len(learned_in_day)} / {len(day_df)}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="status-box">📊 {sel_day} : {len(learned_in_day)} / {len(day_df)}</div>', unsafe_allow_html=True)
 
     # 2. 단어 카드
     st.markdown(f'<div class="word-card"><h1 class="japanese-word">{row.iloc[1]}</h1></div>', unsafe_allow_html=True)
 
-    # 3. 터치형 정답 확인 로직
-    def touch_reveal(label, key, content, has_voice=False):
+    # 3. 정답 확인
+    def reveal_simple(label, key, content):
         if not st.session_state.show[key]:
-            # 아직 안 봤을 때는 '확인' 버튼
             if st.button(f"👁️ {label} 확인", key=f"btn_{key}"):
-                st.session_state.show[key] = True; st.rerun()
+                st.session_state.show[key] = True
+                st.rerun()
         else:
-            # 봤을 때는 텍스트 상자 노출
-            if has_voice:
-                # 소리 나는 박스는 민트색 테두리 + 클릭 시 소리 재생
-                if st.button(f"🔊 {content}", key=f"txt_{key}"):
-                    play_voice(content)
-            else:
-                # 소리 없는 박스는 일반 회색 테두리
-                st.markdown(f'<div class="ans-normal">{content}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="ans-box">{content}</div>', unsafe_allow_html=True)
 
-    touch_reveal("읽기", "reading", row.iloc[2], has_voice=True)
-    touch_reveal("뜻", "mean", row.iloc[3])
-    touch_reveal("예문", "ex", row.iloc[4], has_voice=True)
-    touch_reveal("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
+    reveal_simple("읽기", "reading", row.iloc[2])
+    reveal_simple("뜻", "mean", row.iloc[3])
+    reveal_simple("예문", "ex", row.iloc[4])
+    reveal_simple("한자", "kanji", row.iloc[5] if len(row)>5 else "-")
 
-    # 4. 하단 조작
+    # 4. 하단 버튼
     st.write("")
     cl, cr = st.columns(2)
     with cl:
-        if st.button("⏭️ 패스"):
+        if st.button("⏭️ 패스", use_container_width=True):
             st.session_state.idx = (st.session_state.idx + 1) % len(display_df)
-            st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
+            st.session_state.show = {k:False for k in st.session_state.show}
+            st.rerun()
     with cr:
-        if st.button("✅ 외웠다", type="primary"):
+        if st.button("✅ 외웠다", type="primary", use_container_width=True):
             st.session_state.learned.add(row['GlobalID'])
-            st.session_state.show = {k:False for k in st.session_state.show}; st.rerun()
+            # 섞기 모드일 때 다음 단어를 위해 시드 변경 (선택사항)
+            # if do_shuffle: st.session_state.shuffle_seed += 1 
+            st.session_state.show = {k:False for k in st.session_state.show}
+            st.rerun()
 else:
-    st.success("해당 구간을 모두 정복했습니다!"); st.balloons()
+    st.balloons()
+    st.success("모든 단어를 마스터했습니다!")
